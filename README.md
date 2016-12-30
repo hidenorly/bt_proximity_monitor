@@ -1,2 +1,4 @@
 # bt_proximity_monitor
-Watch your phone is in ranged or not and do something
+
+Watch whether bt devices (your phone, etc) is in ranged or not and do something.
+
