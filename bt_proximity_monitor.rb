@@ -15,6 +15,8 @@
 # limitations under the License.
 
 require 'optparse'
+require 'date'
+require 'time'
 
 # "aa:bb:cc:dd:ee:ff hoge" -> aa:bb:cc:dd:ee:ff
 def getMacAddress(mac)
@@ -134,6 +136,111 @@ def loadRules(ruleFile)
 	return result
 end
 
+def getMinutesFromHHMM(timeHHMM)
+	aTime = timeHHMM.split(":")
+	if aTime.length == 2 then
+		return aTime[0].to_i * 60 + aTime[1].to_i
+	end
+
+	return nil
+end
+
+def matchCheckTime(date, aCondition)
+	result = false
+
+	if aCondition[:startTime] && aCondition[:endTime] then
+		startTime = getMinutesFromHHMM(aCondition[:startTime])
+		endTime = getMinutesFromHHMM(aCondition[:endTime])
+		nowTime = getMinutesFromHHMM("#{date.hour}:#{date.min}")
+		result = true if nowTime>=startTime && nowTime<=endTime
+	elsif !aCondition[:startTime] && !aCondition[:endTime] then
+		result = true
+	end
+
+	return result
+
+end
+
+def matchCheckDay(date, aCondition)
+	result = false
+
+	if aCondition[:onDay] then
+		day = aCondition[:onDay].split("-")
+
+		result = true if day.length == 3 &&
+			day[0].to_i == date.year &&
+			day[1].to_i == date.month &&
+			day[2].to_i == date.day
+	end
+
+	return result
+end
+
+def matchCheckWeek(date, aCondition)
+	result = false
+
+	week = date.strftime("%")
+	result = true if (week=="Mon" && aCondition[:Mon]) ||
+		(week=="Tue" && aCondition[:Tue]) ||
+		(week=="Wed" && aCondition[:Wed]) ||
+		(week=="Thu" && aCondition[:Thu]) ||
+		(week=="Fri" && aCondition[:Fri]) ||
+		(week=="Sat" && aCondition[:Sat]) ||
+		(week=="Sun" && aCondition[:Sun])
+
+	return result
+end
+
+
+def isCandidateMatchTime(aCondition)
+	result = false
+
+	result = true if aCondition[:onDay]==nil && 
+		!aCondition[:Mon] &&
+		!aCondition[:Tue] &&
+		!aCondition[:Wed] &&
+		!aCondition[:Thu] &&
+		!aCondition[:Fri] &&
+		!aCondition[:Sat] &&
+		!aCondition[:Sun] &&
+		aCondition[:startTime]!=nil &&
+		aCondition[:endTime]!=nil
+
+	return result
+end
+
+
+def getNextRule(rules)
+	nowTime = Time.now
+
+	dayCandidates = []
+	weekCandidates = []
+	timeCandidates = []
+
+	rules.each do |aRule|
+		aCondition = aRule[:condition]
+		if matchCheckDay(nowTime, aCondition) then
+			dayCandidates << aRule
+		elsif matchCheckWeek(nowTime, aCondition) then
+			weekCandidates << aRule
+		elsif isCandidateMatchTime(aCondition) then
+			timeCandidates << aRule
+		end
+	end
+
+	candidates = dayCandidates + weekCandidates + timeCandidates # priority order
+
+	nextRule = nil
+	candidates.each do |aCandidate|
+		aCondition = aCandidate[:condition]
+		if matchCheckTime(nowTime, aCondition) then
+			nextRule = aCandidate
+			break
+		end
+	end
+
+	return nextRule
+end
 
 
 options = {
@@ -155,5 +262,8 @@ opt_parser = OptionParser.new do |opts|
 	end
 end.parse!
 
-puts loadTargetDevices(options[:targetDevice])
-puts loadRules(options[:ruleFile])
+devices = loadTargetDevices(options[:targetDevice])
+rules = loadRules(options[:ruleFile])
+
+puts curRule = getNextRule(rules)
+
