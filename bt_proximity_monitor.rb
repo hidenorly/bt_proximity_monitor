@@ -179,7 +179,7 @@ end
 def matchCheckWeek(date, aCondition)
 	result = false
 
-	week = date.strftime("%")
+	week = date.strftime("%a")
 	result = true if (week=="Mon" && aCondition[:Mon]) ||
 		(week=="Tue" && aCondition[:Tue]) ||
 		(week=="Wed" && aCondition[:Wed]) ||
@@ -242,10 +242,44 @@ def getNextRule(rules)
 	return nextRule
 end
 
+def execOnRule(execs)
+	puts execs
+end
+
+def checkProximity(devices)
+	return false
+end
+
+def startWatcher(devices, rules, sleepPeriod)
+	loop do
+		curRule = getNextRule(rules)
+		proximityStatus = checkProximity(devices)
+		if curRule then
+			execOnRule(curRule[:start])
+			begin
+				curStatus = checkProximity(devices)
+				if curStatus!=proximityStatus then
+					if curStatus then
+						execOnRule(curRule[:connected])
+					else
+						execOnRule(curRule[:disconnected])
+					end
+					proximityStatus = curStatus
+				end
+				sleep(sleepPeriod)
+				nextRule = getNextRule(rules)
+			end while curRule == nextRule
+			execOnRule(curRule[:end])
+		else
+			sleep(sleepPeriod)
+		end
+	end
+end
 
 options = {
 	:ruleFile => "rules.cfg",
-	:targetDevice => "devices.cfg"
+	:targetDevice => "devices.cfg",
+	:period => 1
 }
 
 opt_parser = OptionParser.new do |opts|
@@ -253,17 +287,21 @@ opt_parser = OptionParser.new do |opts|
 	opts.on_head("BT Proximity Monitor Copyright 2016 hidenorly")
 	opts.version = "1.0.0"
 
-	opts.on("-r", "--ruleFile=", "Set rule file") do |ruleFile|
+	opts.on("-r", "--ruleFile=", "Set rule file (default:#{options[:ruleFile]}") do |ruleFile|
 		options[:ruleFile] = ruleFile
 	end
 
 	opts.on("-t", "--targetDevice=", "Set target device file or mac addr") do |targetDevice|
 		options[:targetDevice] = targetDevice
 	end
+
+	opts.on("-p", "--priod=", "Set sleep period (default:#{options[:period]})") do |period|
+		options[:period] = period
+	end
 end.parse!
 
 devices = loadTargetDevices(options[:targetDevice])
 rules = loadRules(options[:ruleFile])
 
-puts curRule = getNextRule(rules)
+startWatcher(devices, rules, options[:period])
 
