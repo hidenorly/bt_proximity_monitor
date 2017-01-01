@@ -42,7 +42,7 @@ def loadTargetDevices(targetDevice)
 			end
 		end
 	else
-		result << targetDevice if targetDevice =~ /([0-9a-f]{2}:){5}[0-9a-f]{2}/
+		result << targetDevice if targetDevice =~ /([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/
 	end
 	return result
 end
@@ -242,12 +242,17 @@ def getNextRule(rules)
 	return nextRule
 end
 
-def executeExternalCommand(exec_cmd, timeOutSec=10)
+
+def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(:puts), execOutputCallbackArg=nil)
 	pio = nil
 	begin
 		Timeout.timeout(timeOutSec) do
 			pio = IO.popen(exec_cmd, "r").each do |exec_output|
-				puts exec_output
+				if execOutputCallbackArg then
+					execOutputCallback.call(exec_output, execOutputCallbackArg)
+				else
+					execOutputCallback.call(exec_output)
+				end
 			end
 		end
 	rescue Timeout::Error => ex
@@ -270,11 +275,46 @@ def execOnRule(execs, defaultExecTimeOut)
 	end
 end
 
+EXEC_CMD_GET_RSSI = "hcitool rssi "
+FILTER_RSSI = "RSSI return value"
+
+def getRSSI(macAddr)
+	rssi = nil
+	def _rssiSub(aLine, aRssi)
+		aRssi[0] = aLine if aLine.include?(FILTER_RSSI)
+	end
+	executeExternalCommand(EXEC_CMD_GET_RSSI+macAddr, 3, method(:_rssiSub), [rssi])
+	return rssi
+end
+
+EXEC_CMD_CONNECT1 = "rfcomm connect 0 "
+EXEC_CMD_CONNECT2 = " 1 2> /dev/null >/dev/null &"
+
+def connectByRfComm(macAddr)
+	puts "try to connect #{macAddr}"
+	def _connectByRfComm(aLine)
+		puts aLine # TODO: debug
+	end
+	executeExternalCommand(EXEC_CMD_CONNECT1+macAddr+EXEC_CMD_CONNECT2, 3, method(:_connectByRfComm))
+	sleep 1
+end
+
+
 def checkProximity(devices)
-	return false
+	connected = false
+	devices.each do |aDevice|
+		if getRSSI(aDevice)==nil then
+			# not connected
+			connectByRfComm(aDevice)
+		else
+			connected = true
+		end
+	end
+	return connected
 end
 
 def startWatcher(devices, rules, sleepPeriod, defaultExecTimeOut)
+	proximityStatus = checkProximity(devices) # try twice
 	loop do
 		curRule = getNextRule(rules)
 		proximityStatus = checkProximity(devices)
