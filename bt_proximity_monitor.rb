@@ -16,7 +16,9 @@
 
 require 'optparse'
 require 'date'
-require 'time'
+require 'timeout'
+
+BEGIN { $BASETIME = Time.now.to_i }
 
 # "aa:bb:cc:dd:ee:ff hoge" -> aa:bb:cc:dd:ee:ff
 def getMacAddress(mac)
@@ -242,34 +244,58 @@ def getNextRule(rules)
 	return nextRule
 end
 
-def execOnRule(execs)
-	puts execs
+def executeExternalCommand(exec_cmd, timeOutSec=10)
+	pio = nil
+	begin
+		Timeout.timeout(timeOutSec) do
+			pio = IO.popen(exec_cmd, "r").each do |exec_output|
+				puts exec_output
+			end
+		end
+	rescue Timeout::Error => ex
+		puts "Time out error on execution : #{exec_cmd}"
+		if pio then
+			if pio.pid then
+				Process.kill(9, pio.pid)
+			end
+			pio.close
+		end
+	rescue
+		puts "Error on execution : #{exec_cmd}"
+		# do nothing
+	end
+end
+
+def execOnRule(execs, defaultExecTimeOut)
+	execs.each do |anExec|
+		executeExternalCommand(anExec, defaultExecTimeOut)
+	end
 end
 
 def checkProximity(devices)
 	return false
 end
 
-def startWatcher(devices, rules, sleepPeriod)
+def startWatcher(devices, rules, sleepPeriod, defaultExecTimeOut)
 	loop do
 		curRule = getNextRule(rules)
 		proximityStatus = checkProximity(devices)
 		if curRule then
-			execOnRule(curRule[:start])
+			execOnRule(curRule[:start], defaultExecTimeOut)
 			begin
 				curStatus = checkProximity(devices)
 				if curStatus!=proximityStatus then
 					if curStatus then
-						execOnRule(curRule[:connected])
+						execOnRule(curRule[:connected], defaultExecTimeOut)
 					else
-						execOnRule(curRule[:disconnected])
+						execOnRule(curRule[:disconnected], defaultExecTimeOut)
 					end
 					proximityStatus = curStatus
 				end
 				sleep(sleepPeriod)
 				nextRule = getNextRule(rules)
 			end while curRule == nextRule
-			execOnRule(curRule[:end])
+			execOnRule(curRule[:end], defaultExecTimeOut)
 		else
 			sleep(sleepPeriod)
 		end
@@ -279,7 +305,8 @@ end
 options = {
 	:ruleFile => "rules.cfg",
 	:targetDevice => "devices.cfg",
-	:period => 1
+	:period => 1,
+	:defaultTimeout => 10
 }
 
 opt_parser = OptionParser.new do |opts|
@@ -298,10 +325,14 @@ opt_parser = OptionParser.new do |opts|
 	opts.on("-p", "--priod=", "Set sleep period (default:#{options[:period]})") do |period|
 		options[:period] = period
 	end
+
+	opts.on("-o", "--defaultExecTimeOut=", "Set default execution timeout (default:#{options[:defaultTimeout]})") do |defaultTimeout|
+		options[:defaultTimeout] = defaultTimeout
+	end
 end.parse!
 
 devices = loadTargetDevices(options[:targetDevice])
 rules = loadRules(options[:ruleFile])
 
-startWatcher(devices, rules, options[:period])
+startWatcher(devices, rules, options[:period], options[:defaultTimeout])
 
