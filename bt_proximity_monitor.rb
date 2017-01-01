@@ -18,8 +18,6 @@ require 'optparse'
 require 'date'
 require 'timeout'
 
-BEGIN { $BASETIME = Time.now.to_i }
-
 # "aa:bb:cc:dd:ee:ff hoge" -> aa:bb:cc:dd:ee:ff
 def getMacAddress(mac)
 	pos = mac.index(" ")
