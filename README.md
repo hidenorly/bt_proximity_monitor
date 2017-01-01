@@ -2,6 +2,13 @@
 
 Watch whether bt devices (your phone, etc) is in ranged or not and do something.
 
+# Dependency
+
+* hcitool
+* rfcomm
+* ruby (confirmed on 2.2 but other versions should be fine too)
+* Confirmed OS is Ubuntu Mate 16.04 LTS on Raspberry Pi3 but others should be fine too.
+
 # You can set target device
 
 ```
