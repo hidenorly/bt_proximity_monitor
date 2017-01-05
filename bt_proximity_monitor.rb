@@ -261,11 +261,12 @@ def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(
 			if pio.pid then
 				Process.kill(9, pio.pid)
 			end
-			pio.close
 		end
 	rescue
 		puts "Error on execution : #{exec_cmd}"
 		# do nothing
+	ensure
+		pio.close if pio
 	end
 end
 
@@ -279,12 +280,13 @@ EXEC_CMD_GET_RSSI = "hcitool rssi "
 FILTER_RSSI = "RSSI return value"
 
 def getRSSI(macAddr)
-	rssi = nil
+	rssi = []
+	rssi << nil
 	def _rssiSub(aLine, aRssi)
 		aRssi[0] = aLine if aLine.include?(FILTER_RSSI)
 	end
-	executeExternalCommand(EXEC_CMD_GET_RSSI+macAddr, 3, method(:_rssiSub), [rssi])
-	return rssi
+	executeExternalCommand(EXEC_CMD_GET_RSSI+macAddr, 3, method(:_rssiSub), rssi)
+	return rssi[0]
 end
 
 EXEC_CMD_CONNECT1 = "rfcomm connect 0 "
