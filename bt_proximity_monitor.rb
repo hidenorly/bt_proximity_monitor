@@ -242,7 +242,6 @@ def getNextRule(rules)
 	return nextRule
 end
 
-
 def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(:puts), execOutputCallbackArg=nil)
 	pio = nil
 	begin
@@ -294,11 +293,8 @@ EXEC_CMD_CONNECT2 = " 1 2> /dev/null >/dev/null &"
 
 def connectByRfComm(macAddr)
 	puts "try to connect #{macAddr}"
-	def _connectByRfComm(aLine)
-		puts aLine # TODO: debug
-	end
-	executeExternalCommand(EXEC_CMD_CONNECT1+macAddr+EXEC_CMD_CONNECT2, 3, method(:_connectByRfComm))
-	sleep 1
+	system(EXEC_CMD_CONNECT1+macAddr+EXEC_CMD_CONNECT2)
+	sleep 3
 end
 
 
@@ -319,8 +315,8 @@ def startWatcher(devices, rules, sleepPeriod, defaultExecTimeOut)
 	proximityStatus = checkProximity(devices) # try twice
 	loop do
 		curRule = getNextRule(rules)
-		proximityStatus = checkProximity(devices)
 		if curRule then
+			proximityStatus = checkProximity(devices)
 			execOnRule(curRule[:start], defaultExecTimeOut)
 			begin
 				curStatus = checkProximity(devices)
