@@ -1,0 +1,10 @@
+[Unit]
+Description = BT Proximity Watcher
+
+[Service]
+ExecStart = /opt/bt_proximity_monitor.rb -r /var/opt/btproximity/rules.cfg -t /var/opt/btproximity/devices.cfg
+Restart = always
+Type = simple
+
+[Install]
+WantedBy = multi-user.target

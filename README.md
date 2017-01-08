@@ -50,3 +50,13 @@ bleBulbDriver.rb allOff
 #onDisconnected
 bleBulbDriver.rb allOn
 ```
+
+# To execute this as service (on Ubuntu)
+
+```
+$ sudo ./install.sh
+```
+
+* The ruby file is stored under /opt
+* The configuration files are stored under /var/opt/btproximity
+
