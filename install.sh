@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/bin/bash
 
 echo installing bt_proximity_monitor service
 echo Please note that sudo execution is required.
