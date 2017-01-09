@@ -246,7 +246,7 @@ def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(
 	pio = nil
 	begin
 		Timeout.timeout(timeOutSec) do
-			pio = IO.popen(exec_cmd, "r").each do |exec_output|
+			pio = IO.popen(exec_cmd, STDERR=>[:child, STDOUT]).each do |exec_output|
 				if execOutputCallbackArg then
 					execOutputCallback.call(exec_output, execOutputCallbackArg)
 				else
@@ -297,29 +297,61 @@ def connectByRfComm(macAddr)
 	sleep 3
 end
 
+EXEC_CMD_L2PING = "l2ping -t 1 -c 1 -f "
+FILTER_L2PING = "Can't connect"
+FILTER_L2PING2 = "% loss"
 
-def checkProximity(devices)
+$deviceStatusCache={}
+def checkL2Ping(macAddr)
+	sleep 1
+	result = []
+	result << nil
+	def _l2pingSub(aLine, result)
+		result[0] = aLine if aLine.include?(FILTER_L2PING) || aLine.include?(FILTER_L2PING2)
+	end
+	executeExternalCommand(EXEC_CMD_L2PING+macAddr, 6, method(:_l2pingSub), result)
+
+	connected = ($deviceStatusCache.has_key?(macAddr)) ? $deviceStatusCache[macAddr] : false
+	if result[0] then
+		res = result[0].to_s
+		connected = false if res.include?(FILTER_L2PING) || res.include?("100% loss")
+		connected = true if res.include?(" 0% loss")
+	end
+	$deviceStatusCache[macAddr] = connected
+
+	return connected
+end
+
+
+def checkProximity(devices, detectionType="rfcomm")
 	connected = false
 	devices.each do |aDevice|
-		if getRSSI(aDevice)==nil then
-			# not connected
-			connectByRfComm(aDevice)
-		else
-			connected = true
+		case detectionType
+		when "rfcomm"
+			if getRSSI(aDevice)==nil then
+				# not connected
+				connectByRfComm(aDevice)
+			else
+				connected = true
+			end
+		when "l2ping"
+			connected |= checkL2Ping(aDevice)
 		end
 	end
 	return connected
 end
 
-def startWatcher(devices, rules, sleepPeriod, defaultExecTimeOut)
-	proximityStatus = checkProximity(devices) # try twice
+def startWatcher(devices, rules, options)
+	sleepPeriod = options[:period]
+	defaultExecTimeOut = options[:defaultTimeout]
+	proximityStatus = checkProximity(devices, options[:proximityDetection]) # try twice
 	loop do
 		curRule = getNextRule(rules)
 		if curRule then
-			proximityStatus = checkProximity(devices)
+			proximityStatus = checkProximity(devices, options[:proximityDetection])
 			execOnRule(curRule[:start], defaultExecTimeOut)
 			begin
-				curStatus = checkProximity(devices)
+				curStatus = checkProximity(devices, options[:proximityDetection])
 				if curStatus!=proximityStatus then
 					if curStatus then
 						execOnRule(curRule[:connected], defaultExecTimeOut)
@@ -342,7 +374,8 @@ options = {
 	:ruleFile => "rules.cfg",
 	:targetDevice => "devices.cfg",
 	:period => 1,
-	:defaultTimeout => 10
+	:defaultTimeout => 10,
+	:proximityDetection => "rfcomm"
 }
 
 opt_parser = OptionParser.new do |opts|
@@ -365,10 +398,14 @@ opt_parser = OptionParser.new do |opts|
 	opts.on("-o", "--defaultExecTimeOut=", "Set default execution timeout (default:#{options[:defaultTimeout]})") do |defaultTimeout|
 		options[:defaultTimeout] = defaultTimeout
 	end
+
+	opts.on("-d", "--proximityDetection=", "Set proximity detection method \"rfcomm\" or \"l2ping\" (default:#{options[:proximityDetection]})") do |proximityDetection|
+		options[:proximityDetection] = (proximityDetection.downcase!="rfcomm") ? "l2ping" : "rfcomm"
+	end
 end.parse!
 
 devices = loadTargetDevices(options[:targetDevice])
 rules = loadRules(options[:ruleFile])
 
-startWatcher(devices, rules, options[:period], options[:defaultTimeout])
+startWatcher(devices, rules, options)
 
