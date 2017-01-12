@@ -258,6 +258,7 @@ def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(
 		puts "Time out error on execution : #{exec_cmd}"
 		if pio then
 			if pio.pid then
+				Process.detach(pio.pid)
 				Process.kill(9, pio.pid)
 			end
 		end
