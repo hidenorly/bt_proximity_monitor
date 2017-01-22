@@ -6,7 +6,7 @@ Watch whether bt devices (your phone, etc) is in ranged or not and do something.
 
 * hcitool / rfcomm (default)
 * l2ping (if specified -d l2ping)
-  * Please need pair by rfcomm connection with your iPhone in advance. After that, your iPhone will ack by the l2ping.
+  * Please pair by rfcomm connection with your iPhone in advance. After that, your iPhone will ack by the l2ping.
 * ruby (confirmed on 2.2 but other versions should be fine too)
 * Confirmed OS is Ubuntu Mate 16.04 LTS on Raspberry Pi3 but others should be fine too.
 
