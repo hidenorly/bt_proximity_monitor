@@ -37,7 +37,7 @@ bleBulbDriver.rb allOn
 bleBulbDriver.rb allOff
 #onConnected
 bleBulbDriver.rb allOff
-#onDisconnected
+#onDisconnected if 3 times
 bleBulbDriver.rb allOn
 
 [2017-01-01 03:00-03:26]

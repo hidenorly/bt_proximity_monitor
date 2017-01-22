@@ -101,6 +101,21 @@ def parseCondition(aLine)
 	return result
 end
 
+def getTriggerFromRule(aRuleState, state)
+	case state
+		when S_RULES_PARSE_ON_START
+			return aRuleState[:start]
+		when S_RULES_PARSE_ON_END
+			return aRuleState[:end]
+		when S_RULES_PARSE_ON_CONNECTED
+			return aRuleState[:connected]
+		when S_RULES_PARSE_ON_DISCONNECTED
+			return aRuleState[:disconnected]
+	end
+	return nil
+end
+
+
 def loadRules(ruleFile)
 	result = []
 	if File.exist?(ruleFile) then
@@ -115,18 +130,27 @@ def loadRules(ruleFile)
 					case state
 						when S_RULES_FOUND_NEW_SECTION
 							result << aRuleState if aRuleState!=nil
-							aRuleState={:condition=>parseCondition(aLine), :start=>[],:end=>[],:connected=>[],:disconnected=>[]}
+							aRuleState={
+								:condition=>parseCondition(aLine), 
+								:start=>		{:condition=>nil, :executes=>[]},
+								:end=>			{:condition=>nil, :executes=>[]},
+								:connected=>	{:condition=>nil, :count=>0, :executes=>[]},
+								:disconnected=>	{:condition=>nil, :count=>0, :executes=>[]}
+							}
+						else
+							pos = aLine.index("if ")
+							if pos!=nil then
+								condition = aLine[pos+3..aLine.length].to_i
+								aTrigger = getTriggerFromRule(aRuleState, state)
+								if aTrigger!=nil then
+									aTrigger[:condition] = condition
+								end
+							end
 					end
 				else
-					case newState
-						when S_RULES_PARSE_ON_START
-							aRuleState[:start] << aLine if !aLine.empty?
-						when S_RULES_PARSE_ON_END
-							aRuleState[:end] << aLine if !aLine.empty?
-						when S_RULES_PARSE_ON_CONNECTED
-							aRuleState[:connected] << aLine if !aLine.empty?
-						when S_RULES_PARSE_ON_DISCONNECTED
-							aRuleState[:disconnected] << aLine if !aLine.empty?
+					aTrigger = getTriggerFromRule(aRuleState, state)
+					if aTrigger!=nil then
+						aTrigger[:executes] << aLine if !aLine.empty?
 					end
 				end
 			end
@@ -271,6 +295,7 @@ def executeExternalCommand(exec_cmd, timeOutSec=10, execOutputCallback = method(
 end
 
 def execOnRule(execs, defaultExecTimeOut)
+	execs = execs[:executes]
 	execs.each do |anExec|
 		executeExternalCommand(anExec, defaultExecTimeOut)
 	end
@@ -353,12 +378,33 @@ def startWatcher(devices, rules, options)
 			begin
 				curStatus = checkProximity(devices, options[:proximityDetection])
 				if curStatus!=proximityStatus then
+					didIt=false
 					if curStatus then
-						execOnRule(curRule[:connected], defaultExecTimeOut)
+						#detected as connected
+						curRule[:connected][:count] = curRule[:connected][:count] + 1
+						if( !curRule[:connected][:condition] || curRule[:connected][:count]>=curRule[:connected][:condition] ) then
+							execOnRule(curRule[:connected], defaultExecTimeOut)
+							didIt=true
+						end
 					else
-						execOnRule(curRule[:disconnected], defaultExecTimeOut)
+						#detected as disconnected
+						curRule[:disconnected][:count] = curRule[:disconnected][:count] + 1
+						if( !curRule[:disconnected][:condition] || curRule[:disconnected][:count]>=curRule[:disconnected][:condition] ) then
+							execOnRule(curRule[:disconnected], defaultExecTimeOut)
+							didIt=true
+						end
 					end
-					proximityStatus = curStatus
+					if didIt then
+						curRule[:connected][:count]=0
+						curRule[:disconnected][:count]=0
+						proximityStatus = curStatus
+					end
+				else
+					if curStatus then
+						curRule[:disconnected][:count]=0
+					else
+						curRule[:connected][:count]=0
+					end
 				end
 				sleep(sleepPeriod)
 				nextRule = getNextRule(rules)
@@ -380,10 +426,10 @@ options = {
 
 opt_parser = OptionParser.new do |opts|
 	opts.banner = "Usage: Watch BT devices, Do on connected / disconnected"
-	opts.on_head("BT Proximity Monitor Copyright 2016 hidenorly")
+	opts.on_head("BT Proximity Monitor Copyright 2016,2017 hidenorly")
 	opts.version = "1.0.0"
 
-	opts.on("-r", "--ruleFile=", "Set rule file (default:#{options[:ruleFile]}") do |ruleFile|
+	opts.on("-r", "--ruleFile=", "Set rule file (default:#{options[:ruleFile]})") do |ruleFile|
 		options[:ruleFile] = ruleFile
 	end
 
