@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 
-# Copyright 2016 hidenorly
+# Copyright 2016,2017 hidenorly
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -345,12 +345,11 @@ end
 def startWatcher(devices, rules, options)
 	sleepPeriod = options[:period]
 	defaultExecTimeOut = options[:defaultTimeout]
-	proximityStatus = checkProximity(devices, options[:proximityDetection]) # try twice
 	loop do
 		curRule = getNextRule(rules)
 		if curRule then
-			proximityStatus = checkProximity(devices, options[:proximityDetection])
 			execOnRule(curRule[:start], defaultExecTimeOut)
+			proximityStatus = nil
 			begin
 				curStatus = checkProximity(devices, options[:proximityDetection])
 				if curStatus!=proximityStatus then
