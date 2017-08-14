@@ -365,8 +365,6 @@ class RuleEngine
 		minutes = 0 if minutes < 0
 		timeHHMM="#{(minutes / 60).to_s.rjust(2,"0")}:#{(minutes % 60).to_s.rjust(2,"0")}"
 
-		puts timeHHMM
-
 		return timeHHMM
 	end
 
