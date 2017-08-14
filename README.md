@@ -61,3 +61,18 @@ $ sudo ./install.sh
 * The ruby file is stored under /opt
 * The configuration files are stored under /var/opt/btproximity
 
+# Recommended detection
+
+1. Establish BT connection with rfcomm first.
+```
+./bt_proximity_monitor.rb -t 70:EC:E4:XX:XX:XX
+```
+And please accept the pairing from the running device to your iPhone, etc. on your iPhone.
+
+2. Use BT Proximity detection with l2ping
+
+```
+./bt_proximity_monitor.rb -t 70:EC:E4:XX:XX:XX -d l2ping
+```
+
+Please note that iPhone is very secure device and then before accepting the pairing from the running device, iPhone will not respond for the l2ping query.

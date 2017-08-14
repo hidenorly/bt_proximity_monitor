@@ -433,7 +433,7 @@ options = {
 	:targetDevice => "devices.cfg",
 	:period => 1,
 	:defaultTimeout => 10,
-	:proximityDetection => "rfcomm"
+	:proximityDetection => BTProximity::DETECTION_TYPE1
 }
 
 opt_parser = OptionParser.new do |opts|
