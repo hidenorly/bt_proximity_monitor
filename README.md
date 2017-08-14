@@ -41,7 +41,7 @@ bleBulbDriver.rb allOff
 #onDisconnected if 3 times
 bleBulbDriver.rb allOn
 
-[2017-01-01 03:00-03:26]
+[2017-01-01 03:00-03:26 (random:1hour)]
 #onStart
 bleBulbDriver.rb allOn
 #onEnd
@@ -50,6 +50,13 @@ bleBulbDriver.rb allOff
 bleBulbDriver.rb allOff
 #onDisconnected
 bleBulbDriver.rb allOn
+```
+
+You can specify randomization as ```(random:30min)```, ```(random:1hour)```, etc in the condition field.
+
+```
+[16:30-23:30 Mon Tue Wed Thu Fri Sat Sun (random:30min)]
+[2017-01-01 03:00-03:26 (random:1hour)]
 ```
 
 # To execute this as service (on Ubuntu)

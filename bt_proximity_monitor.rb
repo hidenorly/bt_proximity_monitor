@@ -151,6 +151,19 @@ class BTProximity
 	end
 end
 
+class HashUtils
+	def self.deepCopy(a)
+		if (a) then
+			result = {}
+			a.each do |k,v|
+				v=deepCopy(v) if(v.kind_of?(Hash))
+				result[k] = v
+			end
+			return result
+		end
+	end
+end
+
 class RuleEngine
 	S_RULES_INIT = 0
 	S_RULES_FOUND_NEW_SECTION = 1
@@ -174,7 +187,7 @@ class RuleEngine
 	#[2016-12-31 16:30-23:30]
 	#[16:30-23:30 Mon Tue Wed Thu Fri Sat Sun]
 	def self.parseCondition(aLine)
-		result = {:startTime=>nil, :endTime=>nil, :onDay=>nil, :Mon=>false, :Tue=>false, :Wed=>false, :Thu=>false, :Fri=>false, :Sat=>false, :Sun=>false}
+		result = {:startTime=>nil, :endTime=>nil, :onDay=>nil, :Mon=>false, :Tue=>false, :Wed=>false, :Thu=>false, :Fri=>false, :Sat=>false, :Sun=>false, :randomMin=>0}
 		aLine = aLine[1..aLine.length-2]
 		values = aLine.split(" ")
 		if values.length then
@@ -190,6 +203,16 @@ class RuleEngine
 					else
 						result[:startTime] = result[:endTime] = times[0]
 					end
+				elsif aVal.start_with?("(random:") then
+					aVal = aVal[8..aVal.length]
+					result[:randomMin] = aVal.to_i ? aVal.to_i : 0
+					if aVal.end_with?("min)") then
+						result[:randomMin] *= 1
+					elsif aVal.end_with?("hour)") then
+						result[:randomMin] *= 60
+					end
+					result[:startTime] = getRandomizedHHMM(getMinutesFromHHMM(result[:startTime]), result[:randomMin]) if result[:startTime]
+					result[:endTime] = getRandomizedHHMM(getMinutesFromHHMM(result[:endTime]), result[:randomMin]) if result[:endTime]
 				else
 					result[:onDay] = aVal if aVal =~ /[0-9]+\-[0-9]+\-[0-9]/ #aVal.include?("-")
 					everyday = (aVal=="everyday") ? true : false
@@ -337,6 +360,16 @@ class RuleEngine
 		return result
 	end
 
+	def self.getRandomizedHHMM(minutes, randomMinutes)
+		minutes = minutes - (randomMinutes/2).to_i + rand(randomMinutes)
+		minutes = 0 if minutes < 0
+		timeHHMM="#{(minutes / 60).to_s.rjust(2,"0")}:#{(minutes % 60).to_s.rjust(2,"0")}"
+
+		puts timeHHMM
+
+		return timeHHMM
+	end
+
 	def self.getNextRule(rules)
 		nowTime = Time.now
 
@@ -376,10 +409,18 @@ class RuleEngine
 		end
 	end
 
-	def self.startWatcher(devices, rules, options)
+	$curWeek = nil
+
+	def self.isDayChanged?
+		week = Time.now.strftime("%a")
+		return (week!=$curWeek) ? true : false
+	end
+
+	def self.startWatcher(devices, options)
 		sleepPeriod = options[:period]
 		defaultExecTimeOut = options[:defaultTimeout]
 		loop do
+			rules = loadRules(options[:ruleFile]) if isDayChanged?
 			curRule = getNextRule(rules)
 			if curRule then
 				execOnRule(curRule[:start], defaultExecTimeOut)
@@ -463,7 +504,5 @@ opt_parser = OptionParser.new do |opts|
 end.parse!
 
 devices = NetUtils.loadTargetDevices(options[:targetDevice])
-rules = RuleEngine.loadRules(options[:ruleFile])
-
-RuleEngine.startWatcher(devices, rules, options)
+RuleEngine.startWatcher(devices, options)
 
