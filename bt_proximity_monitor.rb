@@ -375,14 +375,16 @@ class RuleEngine
 		weekCandidates = []
 		timeCandidates = []
 
-		rules.each do |aRule|
-			aCondition = aRule[:condition]
-			if matchCheckDay?(nowTime, aCondition) then
-				dayCandidates << aRule
-			elsif matchCheckWeek?(nowTime, aCondition) then
-				weekCandidates << aRule
-			elsif isCandidateMatchTime?(aCondition) then
-				timeCandidates << aRule
+		if rules then
+			rules.each do |aRule|
+				aCondition = aRule[:condition]
+				if matchCheckDay?(nowTime, aCondition) then
+					dayCandidates << aRule
+				elsif matchCheckWeek?(nowTime, aCondition) then
+					weekCandidates << aRule
+				elsif isCandidateMatchTime?(aCondition) then
+					timeCandidates << aRule
+				end
 			end
 		end
 
@@ -408,15 +410,17 @@ class RuleEngine
 	end
 
 	$curWeek = nil
-
 	def self.isDayChanged?
 		week = Time.now.strftime("%a")
-		return (week!=$curWeek) ? true : false
+		result = (week!=$curWeek) ? true : false
+		$curWeek = week
+		return result
 	end
 
 	def self.startWatcher(devices, options)
 		sleepPeriod = options[:period]
 		defaultExecTimeOut = options[:defaultTimeout]
+		rules = []
 		loop do
 			rules = loadRules(options[:ruleFile]) if isDayChanged?
 			curRule = getNextRule(rules)
