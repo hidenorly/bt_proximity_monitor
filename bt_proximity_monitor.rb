@@ -19,15 +19,19 @@ require 'date'
 require 'timeout'
 
 class NetUtils
-	# "aa:bb:cc:dd:ee:ff hoge" -> aa:bb:cc:dd:ee:ff
-	def self.getMacAddress(mac)
-		pos = mac.index(" ")
-		mac = mac[0..pos] if pos!=nil
-		mac.tr!("-", ":") if mac.include?("-")
-		if mac.count(":")==5 then
-			return mac
+	# "aa:bb:cc:dd:ee:ff hoge" -> {:macAddr=>aa:bb:cc:dd:ee:ff, :hostName=>"hoge"}
+	def self.getDeviceInfo(aLine)
+		result = nil
+		pos = aLine.index(" ")
+		if pos!=nil then
+			mac = aLine[0..pos].strip
+			hostName = aLine[pos+1..aLine.length].strip
+			mac.tr!("-", ":") if mac.include?("-")
+			if mac.count(":")==5 then
+				result = {:macAddr => mac, :hostName=>hostName}
+			end
 		end
-		return nil
+		return result
 	end
 
 	def self.loadTargetDevices(targetDevice)
@@ -36,14 +40,14 @@ class NetUtils
 			File.open(targetDevice) do |file|
 				file.each_line do |aLine|
 					aLine.strip!
-					macAddr = getMacAddress(aLine)
-					if macAddr then
-						result << macAddr
+					aDeviceInfo = getDeviceInfo(aLine)
+					if aDeviceInfo then
+						result << aDeviceInfo
 					end
 				end
 			end
 		else
-			result << targetDevice if targetDevice =~ /([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/
+			result << {:macAddr=>targetDevice, :hostName=>nil} if targetDevice =~ /([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/
 		end
 		return result
 	end
@@ -63,7 +67,7 @@ class ExecUtils
 				end
 			end
 		rescue Timeout::Error => ex
-			puts "Time out error on execution : #{exec_cmd}"
+#			puts "Time out error on execution : #{exec_cmd}"
 			if pio then
 				if pio.pid then
 					Process.detach(pio.pid)
@@ -71,7 +75,7 @@ class ExecUtils
 				end
 			end
 		rescue
-			puts "Error on execution : #{exec_cmd}"
+#			puts "Error on execution : #{exec_cmd}"
 			# do nothing
 		ensure
 			pio.close if pio
@@ -132,22 +136,27 @@ class BTProximity
 	DETECTION_TYPE1="rfcomm"
 	DETECTION_TYPE2="l2ping"
 
-	def self.checkProximity(devices, detectionType=DETECTION_TYPE1)
-		connected = false
+	def self.getProximityDevices(devices, detectionType=DETECTION_TYPE1)
+		connectedDevices = []
 		devices.each do |aDevice|
 			case detectionType
 			when DETECTION_TYPE1
-				if getRSSI(aDevice)==nil then
+				if getRSSI(aDevice[:macAddr])==nil then
 					# not connected
-					connectByRfComm(aDevice)
+					connectByRfComm(aDevice[:macAddr])
 				else
-					connected = true
+					connectedDevices << aDevice
 				end
 			when DETECTION_TYPE2
-				connected |= checkL2Ping(aDevice)
+				connectedDevices << aDevice if checkL2Ping(aDevice[:macAddr])
 			end
 		end
-		return connected
+		return connectedDevices
+	end
+
+	def self.checkProximity(devices, detectionType=DETECTION_TYPE1)
+		connectedDevices = getProximityDevices(devices, detectionType)
+		return !connectedDevices.empty?
 	end
 end
 
@@ -172,7 +181,7 @@ class RuleEngine
 	S_RULES_PARSE_ON_CONNECTED = 4
 	S_RULES_PARSE_ON_DISCONNECTED = 5
 
-	def self.parseRuleState(state, aLine)
+	def self.parseRuleState(aLine)
 		if aLine.start_with?("[") && aLine.end_with?("]") then
 			return S_RULES_FOUND_NEW_SECTION
 		elsif aLine.start_with?("#") then
@@ -181,7 +190,7 @@ class RuleEngine
 			return S_RULES_PARSE_ON_CONNECTED 	 if aLine.start_with?("#onConnected")
 			return S_RULES_PARSE_ON_DISCONNECTED if aLine.start_with?("#onDisconnected")
 		end
-		return state
+		return nil
 	end
 
 	#[2016-12-31 16:30-23:30]
@@ -229,16 +238,24 @@ class RuleEngine
 		return result
 	end
 
-	def self.getTriggerFromRule(aRuleState, state)
+	def self.getTriggerFromRule(aRuleState, state, isNewHandler=false)
 		case state
 			when S_RULES_PARSE_ON_START
 				return aRuleState[:start]
 			when S_RULES_PARSE_ON_END
 				return aRuleState[:end]
 			when S_RULES_PARSE_ON_CONNECTED
-				return aRuleState[:connected]
+				if isNewHandler then
+					aConnected = {:condition=>nil, :count=>0, :executes=>[]}
+					aRuleState[:connected] << aConnected
+				end
+				return aRuleState[:connected].last
 			when S_RULES_PARSE_ON_DISCONNECTED
-				return aRuleState[:disconnected]
+				if isNewHandler then
+					aDisconnected = {:condition=>nil, :count=>0, :executes=>[]}
+					aRuleState[:disconnected] << aDisconnected
+				end
+				return aRuleState[:disconnected].last
 		end
 		return nil
 	end
@@ -251,30 +268,37 @@ class RuleEngine
 			File.open(ruleFile) do |file|
 				file.each_line do |aLine|
 					aLine.strip!
-					newState = parseRuleState(state, aLine)
-					if newState!=state then
-						state = newState
-						case state
-							when S_RULES_FOUND_NEW_SECTION
-								result << aRuleState if aRuleState!=nil
-								aRuleState={
-									:condition=>parseCondition(aLine), 
-									:start=>		{:condition=>nil, :executes=>[]},
-									:end=>			{:condition=>nil, :executes=>[]},
-									:connected=>	{:condition=>nil, :count=>0, :executes=>[]},
-									:disconnected=>	{:condition=>nil, :count=>0, :executes=>[]}
-								}
-							else
-								pos = aLine.index("if ")
-								if pos!=nil then
+					tmpState = parseRuleState(aLine)
+					if tmpState then
+						state = tmpState
+						# found new section or new handler
+						if tmpState == S_RULES_FOUND_NEW_SECTION then
+							# found new section
+							result << aRuleState if aRuleState!=nil
+							aRuleState={
+								:condition=>	parseCondition(aLine),
+								:start=>		{:condition=>nil, :executes=>[]},
+								:end=>			{:condition=>nil, :executes=>[]},
+								:connected=>	[],
+								:disconnected=>	[]
+							}
+						else
+							# found new handler
+							pos = aLine.index("if ")
+							if pos!=nil then
+								if aLine.end_with?("times") then
 									condition = aLine[pos+3..aLine.length].to_i
-									aTrigger = getTriggerFromRule(aRuleState, state)
-									if aTrigger!=nil then
-										aTrigger[:condition] = condition
-									end
+								else
+									condition = aLine[pos+3..aLine.length].strip
 								end
+								aTrigger = getTriggerFromRule(aRuleState, state, true)
+								if aTrigger!=nil then
+									aTrigger[:condition] = condition
+								end
+							end
 						end
 					else
+						# in same handler
 						aTrigger = getTriggerFromRule(aRuleState, state)
 						if aTrigger!=nil then
 							aTrigger[:executes] << aLine if !aLine.empty?
@@ -417,6 +441,44 @@ class RuleEngine
 		return result
 	end
 
+	def self._handleCondition(targetRule, proximityDevices, defaultExecTimeOut)
+		result = false
+
+		targetRule.each do |aConnected|
+			doIt = false
+			if aConnected[:condition] then
+				if aConnected[:condition].is_a?(Integer) then
+					aConnected[:count] = aConnected[:count] + 1
+					doIt=true if aConnected[:count]>=aConnected[:condition]
+				else
+					proximityDevices.each do |aDevice|
+						conditions = aConnected[:condition].to_s.split("||")
+						conditions = [ aConnected[:condition].to_s.downcase ] if !conditions.to_a.length
+						conditions.each do |aCondition|
+							if aCondition.to_s.downcase == "any" ||
+								aDevice[:macAddr].to_s.downcase == aCondition ||
+								aDevice[:hostName].to_s.downcase == aCondition then
+								doIt = true
+								break
+							end
+						end
+					end
+				end
+			else
+				doIt=true
+			end
+
+			if doIt then
+				puts aConnected
+				execOnRule(aConnected, defaultExecTimeOut)
+				aConnected[:count]=0
+				result = true
+			end
+		end
+
+		return result
+	end
+
 	def self.startWatcher(devices, options)
 		sleepPeriod = options[:period]
 		defaultExecTimeOut = options[:defaultTimeout]
@@ -428,34 +490,17 @@ class RuleEngine
 				execOnRule(curRule[:start], defaultExecTimeOut)
 				proximityStatus = nil
 				begin
-					curStatus = BTProximity.checkProximity(devices, options[:proximityDetection])
+					proximityDevices = BTProximity.getProximityDevices(devices, options[:proximityDetection])
+					curStatus = !proximityDevices.empty?
 					if curStatus!=proximityStatus then
-						didIt=false
-						if curStatus then
-							#detected as connected
-							curRule[:connected][:count] = curRule[:connected][:count] + 1
-							if( !curRule[:connected][:condition] || curRule[:connected][:count]>=curRule[:connected][:condition] ) then
-								execOnRule(curRule[:connected], defaultExecTimeOut)
-								didIt=true
-							end
-						else
-							#detected as disconnected
-							curRule[:disconnected][:count] = curRule[:disconnected][:count] + 1
-							if( !curRule[:disconnected][:condition] || curRule[:disconnected][:count]>=curRule[:disconnected][:condition] ) then
-								execOnRule(curRule[:disconnected], defaultExecTimeOut)
-								didIt=true
-							end
-						end
-						if didIt then
-							curRule[:connected][:count]=0
-							curRule[:disconnected][:count]=0
+						targetRule = curStatus ? curRule[:connected] : curRule[:disconnected]
+						if _handleCondition(targetRule, proximityDevices, defaultExecTimeOut) then
 							proximityStatus = curStatus
 						end
 					else
-						if curStatus then
-							curRule[:disconnected][:count]=0
-						else
-							curRule[:connected][:count]=0
+						targetRule = !curStatus ? curRule[:connected] : curRule[:disconnected]
+						targetRule.each do |aConnected|
+							aConnected[:count]=0
 						end
 					end
 					sleep(sleepPeriod)
