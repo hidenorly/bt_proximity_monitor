@@ -455,7 +455,8 @@ class RuleEngine
 						conditions = aConnected[:condition].to_s.split("||")
 						conditions = [ aConnected[:condition].to_s.downcase ] if !conditions.to_a.length
 						conditions.each do |aCondition|
-							if aCondition.to_s.downcase == "any" ||
+							aCondition = aCondition.to_s.downcase
+							if "any" == aCondition ||
 								aDevice[:macAddr].to_s.downcase == aCondition ||
 								aDevice[:hostName].to_s.downcase == aCondition then
 								doIt = true
@@ -469,7 +470,7 @@ class RuleEngine
 			end
 
 			if doIt then
-				puts aConnected
+				#puts aConnected
 				execOnRule(aConnected, defaultExecTimeOut)
 				aConnected[:count]=0
 				result = true
