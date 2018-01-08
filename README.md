@@ -38,6 +38,8 @@ bleBulbDriver.rb allOn
 bleBulbDriver.rb allOff
 #onConnected
 bleBulbDriver.rb allOff
+#onConnected if iPhone1
+echo "Found iPhone1"
 #onDisconnected if 3 times
 bleBulbDriver.rb allOn
 
