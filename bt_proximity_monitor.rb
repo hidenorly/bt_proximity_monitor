@@ -455,7 +455,7 @@ class RuleEngine
 						conditions = aConnected[:condition].to_s.split("||")
 						conditions = [ aConnected[:condition].to_s.downcase ] if !conditions.to_a.length
 						conditions.each do |aCondition|
-							aCondition = aCondition.to_s.downcase
+							aCondition = aCondition.to_s.downcase.strip
 							if "any" == aCondition ||
 								aDevice[:macAddr].to_s.downcase == aCondition ||
 								aDevice[:hostName].to_s.downcase == aCondition then
