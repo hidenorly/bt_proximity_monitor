@@ -327,13 +327,20 @@ class RuleEngine
 			startTime = getMinutesFromHHMM(aCondition[:startTime])
 			endTime = getMinutesFromHHMM(aCondition[:endTime])
 			nowTime = getMinutesFromHHMM("#{date.hour}:#{date.min}")
-			result = true if (startTime<endTime && nowTime>=startTime && nowTime<=endTime) || (startTime>endTime && nowTime<=startTime && nowTime>=endTime) 
+			if startTime>endTime then
+				if nowTime<=getMinutesFromHHMM("24:00") && nowTime>=startTime then
+					result = true
+				elsif nowTime<=endTime then
+					result = true
+				end
+			elsif nowTime>=startTime && nowTime<=endTime then
+				result = true
+			end
 		elsif !aCondition[:startTime] && !aCondition[:endTime] then
 			result = true
 		end
 
 		return result
-
 	end
 
 	def self.matchCheckDay?(date, aCondition)
