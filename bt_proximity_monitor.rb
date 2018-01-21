@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 
-# Copyright 2016,2017 hidenorly
+# Copyright 2016,2017,2018 hidenorly
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -327,7 +327,7 @@ class RuleEngine
 			startTime = getMinutesFromHHMM(aCondition[:startTime])
 			endTime = getMinutesFromHHMM(aCondition[:endTime])
 			nowTime = getMinutesFromHHMM("#{date.hour}:#{date.min}")
-			result = true if nowTime>=startTime && nowTime<=endTime
+			result = true if (startTime<endTime && nowTime>=startTime && nowTime<=endTime) || (startTime>endTime && nowTime<=startTime && nowTime>=endTime) 
 		elsif !aCondition[:startTime] && !aCondition[:endTime] then
 			result = true
 		end
